@@ -212,13 +212,40 @@ impl<RT: Runtime> TransactionalFileStorage<RT> {
         namespace: TableNamespace,
         storage_id: FileStorageId,
     ) -> anyhow::Result<ResolvedDocumentId> {
-        let Some(id) = self._delete(tx, namespace, storage_id.clone()).await? else {
+        let Some(document) = self._delete(tx, namespace, storage_id.clone()).await? else {
             anyhow::bail!(ErrorMetadata::bad_request(
                 "StorageIdNotFound",
                 format!("storage id {storage_id} not found"),
             ));
         };
-        Ok(id)
+        let document_id = document.id();
+        let entry = document.into_value();
+        if std::env::var("CONVEX_DELETE_FILE_OBJECTS_ON_STORAGE_DELETE")
+            .map(|value| value.eq_ignore_ascii_case("true") || value == "1")
+            .unwrap_or(false)
+        {
+            self.delete_storage_object(&entry).await?;
+        }
+        Ok(document_id)
+    }
+
+    pub async fn delete_entry(
+        &self,
+        tx: &mut Transaction<RT>,
+        namespace: TableNamespace,
+        storage_id: FileStorageId,
+    ) -> anyhow::Result<FileStorageEntry> {
+        let Some(document) = self._delete(tx, namespace, storage_id.clone()).await? else {
+            anyhow::bail!(ErrorMetadata::bad_request(
+                "StorageIdNotFound",
+                format!("storage id {storage_id} not found"),
+            ));
+        };
+        Ok(document.into_value())
+    }
+
+    pub async fn delete_storage_object(&self, entry: &FileStorageEntry) -> anyhow::Result<()> {
+        self.storage.delete_object(&entry.storage_key).await
     }
 
     pub async fn get_file_entry(
@@ -380,11 +407,11 @@ impl<RT: Runtime> TransactionalFileStorage<RT> {
         tx: &mut Transaction<RT>,
         namespace: TableNamespace,
         storage_id: FileStorageId,
-    ) -> anyhow::Result<Option<ResolvedDocumentId>> {
+    ) -> anyhow::Result<Option<ParsedDocument<FileStorageEntry>>> {
         let deleted = FileStorageModel::new(tx, namespace)
             .delete_file(storage_id, Identity::system())
             .await?;
-        Ok(deleted.map(|entry| entry.id()))
+        Ok(deleted)
     }
 
     /// `upload_file` just uploads a file to storage. It does not save the file
