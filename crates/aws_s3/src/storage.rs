@@ -99,6 +99,13 @@ const MIN_S3_INTERMEDIATE_PART_SIZE: usize = 5 * (1 << 20);
 /// S3 maximum part size for multipart upload is 5GiB
 const MAX_S3_INTERMEDIATE_PART_SIZE: usize = 5 * (1 << 30);
 
+fn use_put_object_uploads() -> bool {
+    env::var("AWS_S3_USE_PUT_OBJECT_UPLOADS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or_default()
+}
+
 #[derive(Clone)]
 pub struct S3Storage<RT: Runtime> {
     client: Client,
@@ -249,6 +256,22 @@ impl TryFrom<ClientDrivenUploadToken> for ClientDrivenUpload {
 impl<RT: Runtime> Storage for S3Storage<RT> {
     #[fastrace::trace]
     async fn start_upload(&self) -> anyhow::Result<Box<BufferedUpload>> {
+        if use_put_object_uploads() {
+            let key: ObjectKey = self.runtime.new_uuid_v4().to_string().try_into()?;
+            let s3_key = S3Key(self.key_prefix.clone() + &key);
+            let s3_upload =
+                S3PutObjectUpload::new(self.client.clone(), self.bucket.clone(), key, s3_key);
+            let upload = BufferedUpload::new(
+                s3_upload,
+                MIN_S3_INTERMEDIATE_PART_SIZE,
+                std::cmp::min(
+                    MAX_S3_INTERMEDIATE_PART_SIZE,
+                    *STORAGE_MAX_INTERMEDIATE_PART_SIZE,
+                ),
+            );
+            return Ok(Box::new(upload));
+        }
+
         let key: ObjectKey = self.runtime.new_uuid_v4().to_string().try_into()?;
         let s3_key = S3Key(self.key_prefix.clone() + &key);
         let upload_builder = self
@@ -517,6 +540,76 @@ impl<RT: Runtime> Storage for S3Storage<RT> {
 }
 
 struct S3Key(String);
+
+pub struct S3PutObjectUpload {
+    client: Client,
+    bucket: String,
+    key: ObjectKey,
+    s3_key: S3Key,
+    data: Vec<u8>,
+    is_active: bool,
+}
+
+impl S3PutObjectUpload {
+    fn new(client: Client, bucket: String, key: ObjectKey, s3_key: S3Key) -> Self {
+        Self {
+            client,
+            bucket,
+            key,
+            s3_key,
+            data: vec![],
+            is_active: true,
+        }
+    }
+}
+
+#[async_trait]
+impl Upload for S3PutObjectUpload {
+    async fn write(&mut self, data: Bytes) -> anyhow::Result<()> {
+        anyhow::ensure!(self.is_active, "Upload is not active");
+        self.data.extend_from_slice(&data);
+        Ok(())
+    }
+
+    async fn try_write_parallel<'a>(
+        &'a mut self,
+        stream: &mut Pin<Box<dyn Stream<Item = anyhow::Result<Bytes>> + Send + 'a>>,
+    ) -> anyhow::Result<()> {
+        while let Some(value) = stream.next().await {
+            self.write(value?).await?;
+        }
+        Ok(())
+    }
+
+    async fn abort(mut self: Box<Self>) -> anyhow::Result<()> {
+        self.is_active = false;
+        self.data.clear();
+        Ok(())
+    }
+
+    async fn complete(mut self: Box<Self>) -> anyhow::Result<ObjectKey> {
+        anyhow::ensure!(self.is_active, "Completing inactive upload");
+        self.is_active = false;
+
+        let mut builder = self
+            .client
+            .put_object()
+            .bucket(self.bucket.clone())
+            .key(&self.s3_key.0)
+            .body(ByteStream::from(std::mem::take(&mut self.data)));
+
+        if !is_sse_disabled() {
+            builder = builder.server_side_encryption(ServerSideEncryption::Aes256);
+        }
+
+        if !are_checksums_disabled() {
+            builder = builder.checksum_algorithm(ChecksumAlgorithm::Crc32);
+        }
+
+        builder.send().await?;
+        Ok(self.key.clone())
+    }
+}
 
 pub struct S3Upload<RT: Runtime> {
     client: Client,

@@ -189,14 +189,33 @@ impl<RT: Runtime> TransactionalFileStorage<RT> {
         namespace: TableNamespace,
         storage_id: FileStorageId,
     ) -> anyhow::Result<()> {
-        let success = self._delete(tx, namespace, storage_id.clone()).await?;
-        if !success {
+        let entry = self.delete_entry(tx, namespace, storage_id).await?;
+        if std::env::var("CONVEX_DELETE_FILE_OBJECTS_ON_STORAGE_DELETE")
+            .map(|value| value.eq_ignore_ascii_case("true") || value == "1")
+            .unwrap_or(false)
+        {
+            self.delete_storage_object(&entry).await?;
+        }
+        Ok(())
+    }
+
+    pub async fn delete_entry(
+        &self,
+        tx: &mut Transaction<RT>,
+        namespace: TableNamespace,
+        storage_id: FileStorageId,
+    ) -> anyhow::Result<FileStorageEntry> {
+        let Some(entry) = self._delete(tx, namespace, storage_id.clone()).await? else {
             anyhow::bail!(ErrorMetadata::bad_request(
                 "StorageIdNotFound",
                 format!("storage id {storage_id} not found"),
             ));
-        }
-        Ok(())
+        };
+        Ok(entry)
+    }
+
+    pub async fn delete_storage_object(&self, entry: &FileStorageEntry) -> anyhow::Result<()> {
+        self.storage.delete_object(&entry.storage_key).await
     }
 
     pub async fn get_file_entry(
@@ -364,12 +383,11 @@ impl<RT: Runtime> TransactionalFileStorage<RT> {
         tx: &mut Transaction<RT>,
         namespace: TableNamespace,
         storage_id: FileStorageId,
-    ) -> anyhow::Result<bool> {
-        let did_delete = FileStorageModel::new(tx, namespace)
+    ) -> anyhow::Result<Option<FileStorageEntry>> {
+        let deleted_entry = FileStorageModel::new(tx, namespace)
             .delete_file(storage_id, Identity::system())
-            .await?
-            .is_some();
-        Ok(did_delete)
+            .await?;
+        Ok(deleted_entry)
     }
 
     /// `upload_file` just uploads a file to storage. It does not save the file

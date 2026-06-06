@@ -2188,22 +2188,31 @@ impl<RT: Runtime> ActionCallbacks for ApplicationFunctionRunner<RT> {
     ) -> anyhow::Result<()> {
         let mut tx = self.database.begin(identity.clone()).await?;
         self.bail_if_backend_not_running(&mut tx).await?;
-        self.database
+        let (_ts, file_entry, _stats) = self
+            .database
             .execute_with_occ_retries(
                 identity,
                 FunctionUsageTracker::new(),
                 "app_funrun_storage_delete",
                 |tx| {
                     async {
-                        self.file_storage
-                            .delete(tx, component.into(), storage_id.clone())
+                        let file_entry = self
+                            .file_storage
+                            .delete_entry(tx, component.into(), storage_id.clone())
                             .await?;
-                        Ok(())
+                        Ok(file_entry)
                     }
                     .into()
                 },
             )
             .await?;
+
+        if std::env::var("CONVEX_DELETE_FILE_OBJECTS_ON_STORAGE_DELETE")
+            .map(|value| value.eq_ignore_ascii_case("true") || value == "1")
+            .unwrap_or(false)
+        {
+            self.file_storage.delete_storage_object(&file_entry).await?;
+        }
 
         Ok(())
     }
