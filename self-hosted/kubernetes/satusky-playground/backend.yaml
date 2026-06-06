@@ -1,0 +1,175 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: convex-test-101-backend
+  namespace: playground
+  labels:
+    app.kubernetes.io/name: convex
+    app.kubernetes.io/instance: convex-test-101
+    app.kubernetes.io/component: backend
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: convex
+      app.kubernetes.io/instance: convex-test-101
+      app.kubernetes.io/component: backend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: convex
+        app.kubernetes.io/instance: convex-test-101
+        app.kubernetes.io/component: backend
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /metrics
+        prometheus.io/port: "3210"
+    spec:
+      terminationGracePeriodSeconds: 30
+      hostAliases:
+        - ip: 10.100.63.27
+          hostnames:
+            - convex-test-101.satusky.com
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node.satusky.com/role
+                    operator: In
+                    values:
+                      - compute
+                      - storage-compute
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:17.5-alpine
+          command:
+            - /bin/sh
+            - -ec
+            - until pg_isready -h convex-test-101-pg-rw.playground.svc -p 5432; do sleep 2; done
+      containers:
+        - name: backend
+          image: registry.satusky.com/demo/convex-backend:satusky-ceph-putobject-delete-udf-77554060c-20260606064721
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: api
+              containerPort: 3210
+            - name: site
+              containerPort: 3211
+          env:
+            - name: INSTANCE_NAME
+              value: convex-test-101
+            - name: INSTANCE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: convex-test-101-runtime
+                  key: INSTANCE_SECRET
+            - name: POSTGRES_URL
+              valueFrom:
+                secretKeyRef:
+                  name: convex-test-101-db-creds
+                  key: uri
+            - name: CONVEX_CLOUD_ORIGIN
+              value: https://api-convex-test-101.satusky.com
+            - name: CONVEX_SITE_ORIGIN
+              value: https://convex-test-101.satusky.com
+            - name: PG_CA_FILE
+              value: /etc/convex/postgres-ca/ca.crt
+            - name: DISABLE_METRICS_ENDPOINT
+              value: "false"
+            - name: AWS_S3_FORCE_PATH_STYLE
+              value: "true"
+            - name: AWS_S3_DISABLE_SSE
+              value: "true"
+            - name: AWS_S3_DISABLE_CHECKSUMS
+              value: "true"
+            - name: AWS_S3_USE_PUT_OBJECT_UPLOADS
+              value: "true"
+            - name: CONVEX_DELETE_FILE_OBJECTS_ON_STORAGE_DELETE
+              value: "true"
+          envFrom:
+            - configMapRef:
+                name: convex-test-101-config
+            - secretRef:
+                name: convex-test-101-s3
+          readinessProbe:
+            httpGet:
+              path: /version
+              port: api
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /version
+              port: api
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "4"
+              memory: 4Gi
+          volumeMounts:
+            - name: data
+              mountPath: /convex/data
+            - name: postgres-ca
+              mountPath: /etc/convex/postgres-ca
+              readOnly: true
+      volumes:
+        - name: data
+          emptyDir:
+            sizeLimit: 10Gi
+        - name: postgres-ca
+          secret:
+            secretName: convex-test-101-pg-ca
+            items:
+              - key: ca.crt
+                path: ca.crt
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: convex-test-101-backend
+  namespace: playground
+  labels:
+    app.kubernetes.io/name: convex
+    app.kubernetes.io/instance: convex-test-101
+    app.kubernetes.io/component: backend
+spec:
+  selector:
+    app.kubernetes.io/name: convex
+    app.kubernetes.io/instance: convex-test-101
+    app.kubernetes.io/component: backend
+  ports:
+    - name: api
+      port: 3210
+      targetPort: api
+    - name: site
+      port: 3211
+      targetPort: site
+---
+# This Service intentionally has no matching endpoints. The API ingress routes
+# the exact /metrics path here so Prometheus can scrape pods directly without
+# exposing metrics publicly.
+apiVersion: v1
+kind: Service
+metadata:
+  name: convex-test-101-metrics-block
+  namespace: playground
+  labels:
+    app.kubernetes.io/name: convex
+    app.kubernetes.io/instance: convex-test-101
+    app.kubernetes.io/component: metrics-block
+spec:
+  selector:
+    app.kubernetes.io/name: convex-metrics-block-no-endpoints
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
