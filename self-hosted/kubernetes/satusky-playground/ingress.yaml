@@ -1,0 +1,134 @@
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: convex-test-101-letsencrypt-nginx
+  namespace: playground
+  labels:
+    app.kubernetes.io/name: convex
+    app.kubernetes.io/instance: convex-test-101
+spec:
+  acme:
+    email: dev@satusky.com
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: convex-test-101-letsencrypt-nginx-private-key-ref
+    solvers:
+      - http01:
+          ingress:
+            class: ingress-nginx-my-kul-1a
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: convex-test-101-api
+  namespace: playground
+  labels:
+    app.kubernetes.io/name: convex
+    app.kubernetes.io/instance: convex-test-101
+    app.kubernetes.io/component: backend
+  annotations:
+    cert-manager.io/issuer: convex-test-101-letsencrypt-nginx
+    acme.cert-manager.io/http01-edit-in-place: "true"
+    external-dns.alpha.kubernetes.io/cloudflare-proxied: "true"
+    external-dns.alpha.kubernetes.io/hostname: api-convex-test-101.satusky.com
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: ingress-nginx-my-kul-1a
+  rules:
+    - host: api-convex-test-101.satusky.com
+      http:
+        paths:
+          - path: /metrics
+            pathType: Exact
+            backend:
+              service:
+                name: convex-test-101-metrics-block
+                port:
+                  number: 80
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: convex-test-101-backend
+                port:
+                  number: 3210
+  tls:
+    - hosts:
+        - api-convex-test-101.satusky.com
+      secretName: convex-test-101-api-tls
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: convex-test-101-site
+  namespace: playground
+  labels:
+    app.kubernetes.io/name: convex
+    app.kubernetes.io/instance: convex-test-101
+    app.kubernetes.io/component: backend
+  annotations:
+    cert-manager.io/issuer: convex-test-101-letsencrypt-nginx
+    acme.cert-manager.io/http01-edit-in-place: "true"
+    external-dns.alpha.kubernetes.io/cloudflare-proxied: "true"
+    external-dns.alpha.kubernetes.io/hostname: convex-test-101.satusky.com
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: ingress-nginx-my-kul-1a
+  rules:
+    - host: convex-test-101.satusky.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: convex-test-101-backend
+                port:
+                  number: 3211
+  tls:
+    - hosts:
+        - convex-test-101.satusky.com
+      secretName: convex-test-101-site-tls
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: convex-test-101-dashboard
+  namespace: playground
+  labels:
+    app.kubernetes.io/name: convex
+    app.kubernetes.io/instance: convex-test-101
+    app.kubernetes.io/component: dashboard
+  annotations:
+    cert-manager.io/issuer: convex-test-101-letsencrypt-nginx
+    acme.cert-manager.io/http01-edit-in-place: "true"
+    external-dns.alpha.kubernetes.io/cloudflare-proxied: "true"
+    external-dns.alpha.kubernetes.io/hostname: dashboard-convex-test-101.satusky.com
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: ingress-nginx-my-kul-1a
+  rules:
+    - host: dashboard-convex-test-101.satusky.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: convex-test-101-dashboard
+                port:
+                  number: 6791
+  tls:
+    - hosts:
+        - dashboard-convex-test-101.satusky.com
+      secretName: convex-test-101-dashboard-tls

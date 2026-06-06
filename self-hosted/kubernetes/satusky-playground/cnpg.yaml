@@ -1,0 +1,77 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: convex-test-101-pg
+  namespace: playground
+  labels:
+    app.kubernetes.io/name: convex
+    app.kubernetes.io/instance: convex-test-101
+    app.kubernetes.io/component: postgres
+spec:
+  description: PostgreSQL cluster for the Convex playground proof of concept
+  imageName: ghcr.io/cloudnative-pg/postgresql:17.5
+  instances: 1
+  enablePDB: true
+  startDelay: 30
+  stopDelay: 100
+  primaryUpdateStrategy: unsupervised
+  bootstrap:
+    initdb:
+      database: convex_test_101
+      owner: convex_test_101
+      dataChecksums: true
+      secret:
+        name: convex-test-101-db-creds
+  storage:
+    size: 20Gi
+    storageClass: ceph-block-noreplica
+    pvcTemplate:
+      accessModes:
+        - ReadWriteOnce
+  walStorage:
+    size: 10Gi
+    storageClass: ceph-block-noreplica
+    pvcTemplate:
+      accessModes:
+        - ReadWriteOnce
+  resources:
+    requests:
+      cpu: "1"
+      memory: 1Gi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  postgresql:
+    parameters:
+      max_connections: "87"
+      shared_buffers: "256MB"
+      effective_cache_size: "768MB"
+      maintenance_work_mem: "64MB"
+      checkpoint_completion_target: "0.9"
+      wal_buffers: "7864kB"
+      default_statistics_target: "100"
+      random_page_cost: "1.1"
+      effective_io_concurrency: "200"
+      work_mem: "753kB"
+      huge_pages: "off"
+      min_wal_size: "1GB"
+      max_wal_size: "4GB"
+  affinity:
+    podAntiAffinityType: required
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: node.satusky.com/role
+                operator: In
+                values:
+                  - storage
+                  - storage-compute
+              - key: cluster.satusky.com/environment
+                operator: In
+                values:
+                  - production
+              - key: kubernetes.io/hostname
+                operator: NotIn
+                values:
+                  - storage-main-03
