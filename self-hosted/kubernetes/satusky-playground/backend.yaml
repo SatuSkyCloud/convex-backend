@@ -79,6 +79,8 @@ spec:
               value: /etc/convex/postgres-ca/ca.crt
             - name: DISABLE_METRICS_ENDPOINT
               value: "false"
+            - name: POSTGRES_MAX_CONNECTIONS
+              value: "64"
             - name: AWS_S3_FORCE_PATH_STYLE
               value: "true"
             - name: AWS_S3_DISABLE_SSE
