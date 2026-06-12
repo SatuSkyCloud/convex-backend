@@ -150,6 +150,9 @@ Run the same synthetic workload against hosted Convex and self-hosted Convex
 from the same client location. Record dataset size, concurrency, client
 location, test duration, and raw results.
 
+The first self-hosted versus managed Convex `S256` benchmark and PostgreSQL
+tuning notes are recorded in `BENCHMARKING.md`.
+
 ## Backup and Restore Drill
 
 This PoC intentionally deploys raw CNPG without Barman plugin integration or a

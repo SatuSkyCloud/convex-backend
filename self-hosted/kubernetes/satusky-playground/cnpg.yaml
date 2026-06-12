@@ -36,23 +36,23 @@ spec:
         - ReadWriteOnce
   resources:
     requests:
-      cpu: "1"
-      memory: 1Gi
+      cpu: "2"
+      memory: 4Gi
     limits:
-      cpu: "1"
-      memory: 1Gi
+      cpu: "2"
+      memory: 4Gi
   postgresql:
     parameters:
-      max_connections: "87"
-      shared_buffers: "256MB"
-      effective_cache_size: "768MB"
-      maintenance_work_mem: "64MB"
+      max_connections: "300"
+      shared_buffers: "1GB"
+      effective_cache_size: "3GB"
+      maintenance_work_mem: "256MB"
       checkpoint_completion_target: "0.9"
-      wal_buffers: "7864kB"
+      wal_buffers: "16MB"
       default_statistics_target: "100"
       random_page_cost: "1.1"
       effective_io_concurrency: "200"
-      work_mem: "753kB"
+      work_mem: "4MB"
       huge_pages: "off"
       min_wal_size: "1GB"
       max_wal_size: "4GB"
