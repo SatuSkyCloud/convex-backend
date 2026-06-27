@@ -28,6 +28,8 @@ spec:
         prometheus.io/port: "3210"
     spec:
       terminationGracePeriodSeconds: 30
+      imagePullSecrets:
+        - name: satusky-registry
       hostAliases:
         - ip: 10.100.63.27
           hostnames:
