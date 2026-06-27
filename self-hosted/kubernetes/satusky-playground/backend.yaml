@@ -51,7 +51,7 @@ spec:
             - until pg_isready -h convex-test-101-pg-rw.playground.svc -p 5432; do sleep 2; done
       containers:
         - name: backend
-          image: registry.satusky.com/demo/convex-backend:satusky-ceph-putobject-delete-udf-77554060c-20260606064721
+          image: registry.satusky.com/satusky-marketplace/convex-backend:satusky-ceph-putobject-delete-udf-682b6bb41-20260627092518
           imagePullPolicy: IfNotPresent
           ports:
             - name: api
