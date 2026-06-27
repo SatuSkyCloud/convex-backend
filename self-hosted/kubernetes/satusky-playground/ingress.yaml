@@ -14,121 +14,158 @@ spec:
       name: convex-test-101-letsencrypt-nginx-private-key-ref
     solvers:
       - http01:
-          ingress:
-            class: ingress-nginx-my-kul-1a
+          gatewayHTTPRoute:
+            parentRefs:
+              - group: gateway.networking.k8s.io
+                kind: Gateway
+                name: satusky-gateway-direct
+                namespace: gateway-system
+            serviceType: ClusterIP
 ---
-apiVersion: networking.k8s.io/v1
-kind: Ingress
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
 metadata:
-  name: convex-test-101-api
+  name: convex-test-101-api-direct
   namespace: playground
   labels:
     app.kubernetes.io/name: convex
     app.kubernetes.io/instance: convex-test-101
     app.kubernetes.io/component: backend
+    gateway.satusky.com/surface: direct
   annotations:
-    cert-manager.io/issuer: convex-test-101-letsencrypt-nginx
-    acme.cert-manager.io/http01-edit-in-place: "true"
     external-dns.alpha.kubernetes.io/cloudflare-proxied: "true"
     external-dns.alpha.kubernetes.io/hostname: api-convex-test-101.satusky.com
-    nginx.ingress.kubernetes.io/proxy-body-size: "0"
-    nginx.ingress.kubernetes.io/proxy-buffering: "off"
-    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    external-dns.alpha.kubernetes.io/target: 211.25.36.186
 spec:
-  ingressClassName: ingress-nginx-my-kul-1a
+  parentRefs:
+    - name: satusky-gateway-direct
+      namespace: gateway-system
+  hostnames:
+    - api-convex-test-101.satusky.com
   rules:
-    - host: api-convex-test-101.satusky.com
-      http:
-        paths:
-          - path: /metrics
-            pathType: Exact
-            backend:
-              service:
-                name: convex-test-101-metrics-block
-                port:
-                  number: 80
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: convex-test-101-backend
-                port:
-                  number: 3210
-  tls:
-    - hosts:
-        - api-convex-test-101.satusky.com
-      secretName: convex-test-101-api-tls
+    - matches:
+        - path:
+            type: Exact
+            value: /metrics
+      backendRefs:
+        - name: convex-test-101-metrics-block
+          port: 80
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: convex-test-101-backend
+          port: 3210
 ---
-apiVersion: networking.k8s.io/v1
-kind: Ingress
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
 metadata:
-  name: convex-test-101-site
+  name: convex-test-101-site-direct
   namespace: playground
   labels:
     app.kubernetes.io/name: convex
     app.kubernetes.io/instance: convex-test-101
     app.kubernetes.io/component: backend
+    gateway.satusky.com/surface: direct
   annotations:
-    cert-manager.io/issuer: convex-test-101-letsencrypt-nginx
-    acme.cert-manager.io/http01-edit-in-place: "true"
     external-dns.alpha.kubernetes.io/cloudflare-proxied: "true"
     external-dns.alpha.kubernetes.io/hostname: convex-test-101.satusky.com
-    nginx.ingress.kubernetes.io/proxy-body-size: "0"
-    nginx.ingress.kubernetes.io/proxy-buffering: "off"
-    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    external-dns.alpha.kubernetes.io/target: 211.25.36.186
 spec:
-  ingressClassName: ingress-nginx-my-kul-1a
+  parentRefs:
+    - name: satusky-gateway-direct
+      namespace: gateway-system
+  hostnames:
+    - convex-test-101.satusky.com
   rules:
-    - host: convex-test-101.satusky.com
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: convex-test-101-backend
-                port:
-                  number: 3211
-  tls:
-    - hosts:
-        - convex-test-101.satusky.com
-      secretName: convex-test-101-site-tls
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: convex-test-101-backend
+          port: 3211
 ---
-apiVersion: networking.k8s.io/v1
-kind: Ingress
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
 metadata:
-  name: convex-test-101-dashboard
+  name: convex-test-101-dashboard-direct
   namespace: playground
   labels:
     app.kubernetes.io/name: convex
     app.kubernetes.io/instance: convex-test-101
     app.kubernetes.io/component: dashboard
+    gateway.satusky.com/surface: direct
   annotations:
-    cert-manager.io/issuer: convex-test-101-letsencrypt-nginx
-    acme.cert-manager.io/http01-edit-in-place: "true"
     external-dns.alpha.kubernetes.io/cloudflare-proxied: "true"
     external-dns.alpha.kubernetes.io/hostname: dashboard-convex-test-101.satusky.com
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    external-dns.alpha.kubernetes.io/target: 211.25.36.186
 spec:
-  ingressClassName: ingress-nginx-my-kul-1a
+  parentRefs:
+    - name: satusky-gateway-direct
+      namespace: gateway-system
+  hostnames:
+    - dashboard-convex-test-101.satusky.com
   rules:
-    - host: dashboard-convex-test-101.satusky.com
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: convex-test-101-dashboard
-                port:
-                  number: 6791
-  tls:
-    - hosts:
-        - dashboard-convex-test-101.satusky.com
-      secretName: convex-test-101-dashboard-tls
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: convex-test-101-dashboard
+          port: 6791
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: satusky-gateway-direct-convex-test-101-api-tls
+  namespace: playground
+  labels:
+    app.kubernetes.io/instance: convex-test-101
+    gateway.satusky.com/test: direct-temp
+spec:
+  from:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      namespace: gateway-system
+  to:
+    - group: ""
+      kind: Secret
+      name: convex-test-101-api-tls
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: satusky-gateway-direct-convex-test-101-site-tls
+  namespace: playground
+  labels:
+    app.kubernetes.io/instance: convex-test-101
+    gateway.satusky.com/test: direct-temp
+spec:
+  from:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      namespace: gateway-system
+  to:
+    - group: ""
+      kind: Secret
+      name: convex-test-101-site-tls
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: satusky-gateway-direct-convex-test-101-dashboard-tls
+  namespace: playground
+  labels:
+    app.kubernetes.io/instance: convex-test-101
+    gateway.satusky.com/test: direct-temp
+spec:
+  from:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      namespace: gateway-system
+  to:
+    - group: ""
+      kind: Secret
+      name: convex-test-101-dashboard-tls
