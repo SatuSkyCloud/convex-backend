@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: convex-test-101-config
+  namespace: playground
+  labels:
+    app.kubernetes.io/name: convex
+    app.kubernetes.io/instance: convex-test-101
+data:
+  AWS_REGION: us-east-1
+  S3_ENDPOINT_URL: http://rook-ceph-rgw-ceph-objectstore.rook-ceph.svc:80
+  S3_STORAGE_EXPORTS_BUCKET: convex-test-101-exports
+  S3_STORAGE_FILES_BUCKET: convex-test-101-files
+  S3_STORAGE_MODULES_BUCKET: convex-test-101-modules
+  S3_STORAGE_SEARCH_BUCKET: convex-test-101-search
+  S3_STORAGE_SNAPSHOT_IMPORTS_BUCKET: convex-test-101-snapshot-imports

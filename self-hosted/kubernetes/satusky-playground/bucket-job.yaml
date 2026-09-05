@@ -1,0 +1,45 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: convex-test-101-create-buckets
+  namespace: playground
+  labels:
+    app.kubernetes.io/name: convex
+    app.kubernetes.io/instance: convex-test-101
+    app.kubernetes.io/component: bucket-bootstrap
+spec:
+  backoffLimit: 6
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: convex
+        app.kubernetes.io/instance: convex-test-101
+        app.kubernetes.io/component: bucket-bootstrap
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: aws-cli
+          image: public.ecr.aws/aws-cli/aws-cli:2.17.53
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              for bucket in \
+                convex-test-101-files \
+                convex-test-101-modules \
+                convex-test-101-search \
+                convex-test-101-exports \
+                convex-test-101-snapshot-imports
+              do
+                if aws --endpoint-url "${S3_ENDPOINT_URL}" s3api head-bucket --bucket "${bucket}" 2>/dev/null; then
+                  echo "Bucket ${bucket} already exists"
+                else
+                  echo "Creating bucket ${bucket}"
+                  aws --endpoint-url "${S3_ENDPOINT_URL}" s3api create-bucket --bucket "${bucket}"
+                fi
+              done
+          envFrom:
+            - configMapRef:
+                name: convex-test-101-config
+            - secretRef:
+                name: convex-test-101-s3

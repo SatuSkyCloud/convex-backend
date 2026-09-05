@@ -1,0 +1,15 @@
+apiVersion: ceph.rook.io/v1
+kind: CephObjectStoreUser
+metadata:
+  name: convex-test-101
+  namespace: rook-ceph
+  labels:
+    app.kubernetes.io/name: convex
+    app.kubernetes.io/instance: convex-test-101
+spec:
+  store: ceph-objectstore
+  displayName: Convex playground test 101
+  quotas:
+    maxBuckets: 10
+    maxSize: 100Gi
+

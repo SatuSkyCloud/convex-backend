@@ -1,0 +1,58 @@
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: convex-test-101-backend-ingress
+  namespace: playground
+  labels:
+    app.kubernetes.io/name: convex
+    app.kubernetes.io/instance: convex-test-101
+spec:
+  description: Allow nginx ingress and Prometheus scraping to the Convex backend
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: convex
+      app.kubernetes.io/instance: convex-test-101
+      app.kubernetes.io/component: backend
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: ingress-nginx
+            k8s:io.kubernetes.pod.namespace: ingress-nginx-my-kul-1a
+      toPorts:
+        - ports:
+            - port: "3210"
+              protocol: TCP
+            - port: "3211"
+              protocol: TCP
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: monitoring
+      toPorts:
+        - ports:
+            - port: "3210"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: convex-test-101-dashboard-ingress
+  namespace: playground
+  labels:
+    app.kubernetes.io/name: convex
+    app.kubernetes.io/instance: convex-test-101
+spec:
+  description: Allow nginx ingress to the Convex dashboard
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: convex
+      app.kubernetes.io/instance: convex-test-101
+      app.kubernetes.io/component: dashboard
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: ingress-nginx
+            k8s:io.kubernetes.pod.namespace: ingress-nginx-my-kul-1a
+      toPorts:
+        - ports:
+            - port: "6791"
+              protocol: TCP

@@ -1,0 +1,113 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: convex-test-101-s3-probe
+  namespace: playground
+  labels:
+    app.kubernetes.io/name: convex
+    app.kubernetes.io/instance: convex-test-101
+    app.kubernetes.io/component: s3-probe
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: convex
+        app.kubernetes.io/instance: convex-test-101
+        app.kubernetes.io/component: s3-probe
+    spec:
+      restartPolicy: Never
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: aws-cli
+          image: public.ecr.aws/aws-cli/aws-cli:2.17.53
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          envFrom:
+            - secretRef:
+                name: convex-test-101-s3
+            - configMapRef:
+                name: convex-test-101-config
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              set -eu
+
+              endpoint="${S3_ENDPOINT_URL}"
+              bucket="${S3_STORAGE_FILES_BUCKET}"
+              stamp="$(date +%s)"
+              key="probe/manual-${stamp}-single"
+              mpkey="probe/manual-${stamp}-multipart"
+
+              printf "hello-convex-ceph-range-test-0123456789" > /tmp/body
+
+              echo "normal put-object/head/range"
+              aws --endpoint-url "${endpoint}" s3api put-object \
+                --bucket "${bucket}" \
+                --key "${key}" \
+                --body /tmp/body >/dev/null
+              aws --endpoint-url "${endpoint}" s3api head-object \
+                --bucket "${bucket}" \
+                --key "${key}" \
+                --query '{Length:ContentLength,ETag:ETag}'
+              aws --endpoint-url "${endpoint}" s3api get-object \
+                --bucket "${bucket}" \
+                --key "${key}" \
+                --range bytes=0-9 \
+                /tmp/range-normal
+
+              echo "existing probe and Convex-created objects"
+              aws --endpoint-url "${endpoint}" s3 ls "s3://${bucket}/probe/" --recursive || true
+              aws --endpoint-url "${endpoint}" s3 ls "s3://${bucket}/" --recursive | tail -20 || true
+
+              echo "single-part multipart upload/head/range"
+              aws --endpoint-url "${endpoint}" s3api create-multipart-upload \
+                --bucket "${bucket}" \
+                --key "${mpkey}" \
+                > /tmp/create-multipart.json
+              cat /tmp/create-multipart.json
+              upload_id="$(sed -n 's/.*"UploadId": "\([^"]*\)".*/\1/p' /tmp/create-multipart.json)"
+              aws --endpoint-url "${endpoint}" s3api upload-part \
+                --bucket "${bucket}" \
+                --key "${mpkey}" \
+                --upload-id "${upload_id}" \
+                --part-number 1 \
+                --body /tmp/body \
+                > /tmp/upload-part.json
+              cat /tmp/upload-part.json
+              etag="$(grep -Eo '[0-9a-f]{32}' /tmp/upload-part.json | head -1)"
+              printf '{"Parts":[{"ETag":"\\"%s\\"","PartNumber":1}]}' "${etag}" > /tmp/parts.json
+              cat /tmp/parts.json
+              set +e
+              aws --endpoint-url "${endpoint}" s3api complete-multipart-upload \
+                --bucket "${bucket}" \
+                --key "${mpkey}" \
+                --upload-id "${upload_id}" \
+                --multipart-upload file:///tmp/parts.json
+              complete_status="$?"
+              set -e
+              echo "complete-multipart-upload exit=${complete_status}"
+              aws --endpoint-url "${endpoint}" s3api head-object \
+                --bucket "${bucket}" \
+                --key "${mpkey}" \
+                --query '{Length:ContentLength,ETag:ETag}' || true
+              set +e
+              aws --endpoint-url "${endpoint}" s3api get-object \
+                --bucket "${bucket}" \
+                --key "${mpkey}" \
+                --range bytes=0-9 \
+                /tmp/range-multipart
+              range_status="$?"
+              set -e
+              echo "multipart range exit=${range_status}"
+
+              echo "probe objects"
+              aws --endpoint-url "${endpoint}" s3 ls "s3://${bucket}/probe/" --recursive
