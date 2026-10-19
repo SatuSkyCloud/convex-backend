@@ -27,7 +27,10 @@ permissions:
 jobs:
   build:
     name: ${{ matrix.component }}
-    runs-on: ubuntu-24.04
+    # Self-hosted runners carry the disk a Rust build needs; the repo was added
+    # to the privileged runner group for exactly this. Falls back to hosted if
+    # the group is ever removed.
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
@@ -35,9 +38,11 @@ jobs:
           - component: backend
             dockerfile: self-hosted/docker-build/Dockerfile.backend
             repository: satusky-convex
+            runner: satusky-org-runners-privileged
           - component: dashboard
             dockerfile: self-hosted/docker-build/Dockerfile.dashboard
             repository: satusky-convex-dashboard
+            runner: satusky-org-runners-privileged
     steps:
       - uses: actions/checkout@v4
 
