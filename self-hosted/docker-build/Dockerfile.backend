@@ -139,6 +139,7 @@ COPY --chmod=744 self-hosted/docker-build/generate_admin_key.sh .
 VOLUME /convex/data
 
 # Set the backend as the executable
+USER 10001:10001
 ENTRYPOINT ["./run_backend.sh"]
 
 # Expose the required ports
