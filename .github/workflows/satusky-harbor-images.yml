@@ -27,11 +27,12 @@ permissions:
 jobs:
   build:
     name: ${{ matrix.component }}
-    # Self-hosted runners carry the disk a Rust build needs. The label comes from
-    # the org variable SELF_HOSTED_RUNNER_LABEL so it cannot drift from whatever
-    # the runner group actually advertises -- asking for a label nobody carries
-    # queues forever instead of failing.
-    runs-on: ${{ vars.SELF_HOSTED_RUNNER_LABEL || matrix.runner }}
+    # Must be the PRIVILEGED pool: it is the only one that runs Docker-in-Docker.
+    # satusky-org-runners is containerMode: kubernetes by design -- no daemon --
+    # so `docker login` there waits on a socket that does not exist and fails
+    # with "context deadline exceeded", which reads like a registry problem and
+    # is not one.
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
@@ -39,11 +40,11 @@ jobs:
           - component: backend
             dockerfile: self-hosted/docker-build/Dockerfile.backend
             repository: satusky-convex
-            runner: satusky-org-runners
+            runner: satusky-org-runners-privileged
           - component: dashboard
             dockerfile: self-hosted/docker-build/Dockerfile.dashboard
             repository: satusky-convex-dashboard
-            runner: satusky-org-runners
+            runner: satusky-org-runners-privileged
     steps:
       - uses: actions/checkout@v4
 
@@ -64,12 +65,7 @@ jobs:
           username: ${{ secrets.SATUSKY_REGISTRY_USER_USERNAME }}
           password: ${{ secrets.SATUSKY_REGISTRY_PASSWORD }}
 
-      # The self-hosted runner is unprivileged, so the default docker-container
-      # driver cannot start a builder ("failed to initialize builder"). The
-      # docker driver builds through the daemon instead.
       - uses: docker/setup-buildx-action@v3
-        with:
-          driver: docker
 
       # Depot is used when its token is configured (faster, cached layers);
       # otherwise build locally so this workflow never blocks on external setup.
