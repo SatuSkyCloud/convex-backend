@@ -27,10 +27,11 @@ permissions:
 jobs:
   build:
     name: ${{ matrix.component }}
-    # Self-hosted runners carry the disk a Rust build needs; the repo was added
-    # to the privileged runner group for exactly this. Falls back to hosted if
-    # the group is ever removed.
-    runs-on: ${{ matrix.runner }}
+    # Self-hosted runners carry the disk a Rust build needs. The label comes from
+    # the org variable SELF_HOSTED_RUNNER_LABEL so it cannot drift from whatever
+    # the runner group actually advertises -- asking for a label nobody carries
+    # queues forever instead of failing.
+    runs-on: ${{ vars.SELF_HOSTED_RUNNER_LABEL || matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
@@ -38,11 +39,11 @@ jobs:
           - component: backend
             dockerfile: self-hosted/docker-build/Dockerfile.backend
             repository: satusky-convex
-            runner: satusky-org-runners-privileged
+            runner: satusky-org-runners
           - component: dashboard
             dockerfile: self-hosted/docker-build/Dockerfile.dashboard
             repository: satusky-convex-dashboard
-            runner: satusky-org-runners-privileged
+            runner: satusky-org-runners
     steps:
       - uses: actions/checkout@v4
 
