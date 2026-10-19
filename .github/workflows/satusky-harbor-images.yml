@@ -1,10 +1,9 @@
 name: Build and push SatuSky Harbor images
 
-# The platform runs these images from registry.satusky.com, never from a
-# third-party registry. Convex's own release workflows publish to
-# ghcr.io/get-convex, which is not under our control -- when those packages went
-# private the seven unmirrored dashboards kept running only from node caches,
-# with no recoverable source. This workflow keeps both halves ours.
+# The platform runs Convex from registry.satusky.com, never from a third-party
+# registry. Convex's own release workflows publish to ghcr.io/get-convex, which
+# is not under our control -- when those packages went private, seven dashboards
+# kept running only from node image caches with no recoverable source.
 
 on:
   push:
@@ -42,7 +41,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Pull requests build only: no registry credentials, no push.
+      # The backend is a large Rust build; hosted runners start with little
+      # free space and will fail mid-compile without this.
+      - name: Free disk space
+        if: matrix.component == 'backend'
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /opt/hostedtoolcache/CodeQL /usr/local/share/boost || true
+          df -h /
+
       - name: Log in to Harbor
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
@@ -51,12 +58,29 @@ jobs:
           username: ${{ secrets.SATUSKY_REGISTRY_USER_USERNAME }}
           password: ${{ secrets.SATUSKY_REGISTRY_PASSWORD }}
 
-      - uses: depot/setup-action@v1
+      - uses: docker/setup-buildx-action@v3
 
-      - name: Build ${{ matrix.component }}
+      # Depot is used when its token is configured (faster, cached layers);
+      # otherwise build locally so this workflow never blocks on external setup.
+      - name: Build ${{ matrix.component }} (Depot)
+        if: ${{ env.DEPOT_TOKEN != '' }}
+        env:
+          DEPOT_TOKEN: ${{ secrets.DEPOT_TOKEN }}
         uses: depot/build-push-action@v1
         with:
           project: ${{ secrets.DEPOT_PROJECT_ID }}
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            registry.satusky.com/satusky-marketplace/${{ matrix.repository }}:${{ github.sha }}
+            registry.satusky.com/satusky-marketplace/${{ matrix.repository }}:${{ github.ref_name }}
+
+      - name: Build ${{ matrix.component }} (local)
+        if: ${{ env.DEPOT_TOKEN == '' }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
           file: ${{ matrix.dockerfile }}
           platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
