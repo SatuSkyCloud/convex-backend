@@ -4,4 +4,8 @@ convex_local_backend*.sqlite3
 convex_local_storage/
 .DS_Store
 .turbo/
-# testing 123
+.env
+.env.*
+!.env.example
+.next/
+tsconfig.tsbuildinfo

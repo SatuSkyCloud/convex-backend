@@ -1,0 +1,63 @@
+name: Build and push SatuSky Harbor images
+
+# The platform runs these images from registry.satusky.com, never from a
+# third-party registry. Convex's own release workflows publish to
+# ghcr.io/get-convex, which is not under our control -- when those packages went
+# private the seven unmirrored dashboards kept running only from node caches,
+# with no recoverable source. This workflow keeps both halves ours.
+
+on:
+  push:
+    branches: [main]
+    tags: ["satusky-*"]
+  pull_request:
+    paths:
+      - "self-hosted/docker-build/**"
+      - ".github/workflows/satusky-harbor-images.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: harbor-images-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.component }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - component: backend
+            dockerfile: self-hosted/docker-build/Dockerfile.backend
+            repository: satusky-convex
+          - component: dashboard
+            dockerfile: self-hosted/docker-build/Dockerfile.dashboard
+            repository: satusky-convex-dashboard
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pull requests build only: no registry credentials, no push.
+      - name: Log in to Harbor
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: registry.satusky.com
+          username: ${{ secrets.SATUSKY_REGISTRY_USER_USERNAME }}
+          password: ${{ secrets.SATUSKY_REGISTRY_PASSWORD }}
+
+      - uses: depot/setup-action@v1
+
+      - name: Build ${{ matrix.component }}
+        uses: depot/build-push-action@v1
+        with:
+          project: ${{ secrets.DEPOT_PROJECT_ID }}
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            registry.satusky.com/satusky-marketplace/${{ matrix.repository }}:${{ github.sha }}
+            registry.satusky.com/satusky-marketplace/${{ matrix.repository }}:${{ github.ref_name }}
