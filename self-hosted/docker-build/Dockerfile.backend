@@ -139,6 +139,10 @@ COPY --chmod=755 self-hosted/docker-build/generate_admin_key.sh .
 VOLUME /convex/data
 
 # Set the backend as the executable
+# /convex/data is declared as a VOLUME, so the build creates it root-owned and a
+# non-root container cannot create data/tmp or data/storage beneath it.
+RUN mkdir -p /convex/data/tmp /convex/data/storage \
+    && chown -R 10001:10001 /convex/data
 USER 10001:10001
 ENTRYPOINT ["./run_backend.sh"]
 
